@@ -51,6 +51,18 @@ const commands = [
         name: 'help',
         description: 'Give name of commands and their description',
     },
+    {
+        name: 'directresponse',
+        description: 'Set the bot to always respond to messages',
+        options: [
+            {
+                name: 'value',
+                description: 'Set the value of alwaysRespond',
+                type: ApplicationCommandOptionType.Boolean,
+                required: true,
+            },
+        ]
+    }
   ];
 
 

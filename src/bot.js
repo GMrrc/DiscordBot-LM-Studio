@@ -4,9 +4,10 @@ require('dotenv').config();
 
 // Map to store recent messages for each guild
 const guildMessages = new Map();
+const guildDirectResponse = new Map();
 
 // Default message to be sent to the model if no context is set
-const defaultMessages = { "role": "system", "content": "You are an AI assistant answering questions, ensure your response is short and precise"};
+const defaultMessages = { "role": "system", "content": "You are an AI assistant, your responses should be short and precise" };
 
 /**
  * Adds a new message to the guild's message history, maintaining a limit of 5 messages.
@@ -32,8 +33,32 @@ function addMessage(guildId, new_message) {
   }
 }
 
-// Create a new Discord client with specified intents
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+/**
+ * Sets the direct response value for the guild.
+ * @param {string} guildId - The ID of the guild.
+ * @param {boolean} value - The value to be set.
+ */
+function setDirectResponse(guildId, value) {
+  try {
+    if (!guildDirectResponse.has(guildId)) {
+      guildDirectResponse.set(guildId, []);
+    }
+    guildDirectResponse.set(guildId, value);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.DirectMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers
+  ]
+});
 
 // Event handler when the bot is ready
 client.on('ready', () => {
@@ -41,11 +66,64 @@ client.on('ready', () => {
 });
 
 
+client.on('messageCreate', async (message) => {
+
+  const guildId = message.guild.id;
+
+  if (!message.guild) return;
+  if (message.author.bot) return;
+  if (message.author.id === client.user.id) return;
+  if (guildDirectResponse.get(guildId)) {
+    try {
+
+      const userRequest = message.content;
+
+      if (userRequest === undefined || userRequest === null || userRequest === "") {
+        return;
+      }
+  
+      const usermessage = { "role": "user", "content": userRequest };
+  
+      addMessage(guildId, usermessage);
+  
+      const requestData = {
+        model: 'local-model',
+        messages: guildMessages.get(guildId),
+        temperature: 0.7,
+        max_tokens: 200,
+      };
+  
+      axios
+      .post(`${process.env.base_url}/chat/completions`, requestData, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.api_key}`,
+        },
+      })
+      .then((response) => {
+        const ping = `<@${message.author.id}>`;
+        const result = ping+" "+response.data.choices[0].message.content.substring(0, 2000);
+        message.channel.send(result);
+        addMessage(guildId, response.data.choices[0].message);
+        console.log("Chat process successfully for user in guild : " + message.guild.name);
+      })
+      .catch((error) => {
+        console.error('Error:', error.errors.code);
+      });
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+
+  
+});
+
+
 // Event handler for interactions (commands)
 client.on('interactionCreate', async (interaction) => {
 
-
-
+    if (!interaction.guild) return;
     if (!interaction.isChatInputCommand()) return;
 
     const guildId = interaction.guildId;
@@ -54,6 +132,10 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.commandName === 'chat') {
 
         const userRequest = interaction.options.get('message').value;
+
+        if (userRequest === undefined || userRequest === null || userRequest === "") {
+          return;
+        }  
 
         const message = { "role": "user", "content": userRequest };
 
@@ -82,7 +164,7 @@ client.on('interactionCreate', async (interaction) => {
           console.log("Chat process successfully for user : " + interaction.user.username + " in guild : " + interaction.guild.name);
         })
         .catch((error) => {
-          console.error('Error:', error.errors || error);
+          console.error('Error:', error.errors.code);
           interaction.deleteReply();
         });
     }
@@ -91,6 +173,11 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.commandName === 'request') {
 
         const userRequest = interaction.options.get('message').value;
+
+        if (userRequest === undefined || userRequest === null || userRequest === "") {
+          return;
+        }  
+
         const message = [
           { "role": "system", "content": "You are an AI assistant answering questions" },
           { "role": "user", "content": userRequest }
@@ -118,7 +205,7 @@ client.on('interactionCreate', async (interaction) => {
           console.log("Request process successfully for user : " + interaction.user.username + " in guild : " + interaction.guild.name);
         })
         .catch((error) => {
-          console.error('Error:', error.errors || error);
+          console.error('Error:', error.errors.code);
           interaction.deleteReply();
         });
     }
@@ -127,6 +214,11 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.commandName === 'config') {
       try {
         const userRequest = interaction.options.get('message').value;
+
+        if (userRequest === undefined || userRequest === null || userRequest === "") {
+          return;
+        }  
+
         interaction.reply("The system prompt is currently : " + userRequest);
     
         if (!guildMessages.has(guildId)) {
@@ -154,7 +246,7 @@ client.on('interactionCreate', async (interaction) => {
           interaction.reply("The system prompt is currently : " + guildMessages.get(guildId)[0].content);
         }
       } catch (error) {
-        console.error(error);
+        console.error('Error:', error.errors.code);
       }
     }
 
@@ -169,7 +261,23 @@ client.on('interactionCreate', async (interaction) => {
           interaction.reply("The context has been reset");
         }
       } catch (error) {
-        console.error(error);
+        console.error('Error:', error.errors.code);
+      }
+    }
+
+    // Handle the /alwaysRespond command
+    if (interaction.commandName === 'directresponse') {
+      try {
+        const value = interaction.options.get('value').value;
+
+        if (value === undefined || value === null || value === "") {
+          return;
+        }
+
+        setDirectResponse(guildId, value);
+        interaction.reply(`The bot will now always respond to messages: ${value}`);
+      } catch (error) {
+        console.error('Error:', error.errors.code);
       }
     }
 
