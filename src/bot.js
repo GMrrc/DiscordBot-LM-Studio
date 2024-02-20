@@ -102,7 +102,7 @@ client.on('messageCreate', async (message) => {
       })
       .then((response) => {
         const ping = `<@${message.author.id}>`;
-        const result = ping+" "+response.data.choices[0].message.content.substring(0, 2000);
+        const result = ping+" "+response.data.choices[0].message.content.substring(0, 2000 - ping.length);
         message.channel.send(result);
         addMessage(guildId, response.data.choices[0].message);
         console.log("Chat process successfully for user in guild : " + message.guild.name);
