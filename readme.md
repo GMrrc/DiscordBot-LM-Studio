@@ -1,4 +1,4 @@
-## Project Title: Discord LLM Bot
+## Discord LLM Bot
 #### Overview
 
 This Discord bot is designed to harness the power of local Language Model (LLM) capabilities using LM_studio server. 
