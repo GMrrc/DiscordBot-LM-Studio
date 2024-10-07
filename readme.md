@@ -13,9 +13,7 @@ This Discord bot is designed to harness the power of local Language Model (LLM) 
 Make sure you have Node.js and npm installed on your machine.
 
 ```bash
-npm install discord.js
-npm install axios
-npm install dotenv
+npm install
 ```
 
 For more detailed information on LM_studio server and its usage, refer to the official github. https://github.com/lmstudio-ai
